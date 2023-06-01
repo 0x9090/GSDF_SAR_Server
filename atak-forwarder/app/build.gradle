@@ -1,0 +1,300 @@
+buildscript {
+
+    ext.PLUGIN_VERSION = "2.0.6"
+    ext.ATAK_VERSION = "4.5.0"
+
+    // Attempt to read ATAK_VERSION from the environment
+    def ENV_ATAK_VERSION = System.getenv('ATAK_VERSION')
+    if (ENV_ATAK_VERSION) {
+        ext.ATAK_VERSION = ENV_ATAK_VERSION
+    }
+
+    def takdevVersion = '2.+'
+
+    ext.getValueFromPropertiesFile = { propFile, key ->
+        if(!propFile.isFile() || !propFile.canRead())
+            return null
+        def prop = new Properties()
+        def reader = propFile.newReader()
+        try {
+            prop.load(reader)
+        } finally {
+            reader.close()
+        }
+        return prop.get(key)
+    }
+
+    def getProperty = { name, defValue ->
+        def prop = project.properties[name] ?:
+                getValueFromPropertiesFile(project.rootProject.file('local.properties'), name)
+        return (null == prop) ? defValue : prop
+    }
+
+    def urlKey = 'takrepo.url'
+
+    ext.isDevKitEnabled = { ->
+        return getProperty(urlKey, null) != null
+    }
+
+    ext.takrepoUrl = getProperty(urlKey, 'http://localhost/')
+    ext.takrepoUser = getProperty('takrepo.user', 'invalid')
+    ext.takrepoPassword = getProperty('takrepo.password', 'invalid')
+    ext.takdevPlugin = getProperty('takdev.plugin', "${rootDir}/../atak-civ-sdk-4.9.0/atak-gradle-takdev.jar")
+
+    repositories {
+        google()
+        mavenCentral()
+        mavenLocal()
+        maven {
+            url "https://jitpack.io"
+        }
+        maven {
+            url = takrepoUrl
+            credentials {
+                username = takrepoUser
+                password = takrepoPassword
+            }
+            allowInsecureProtocol = true
+        }
+    }
+    dependencies {
+        classpath 'com.android.tools.build:gradle:4.2.2'
+        if(isDevKitEnabled()) {
+            classpath "com.atakmap.gradle:atak-gradle-takdev:${takdevVersion}"
+        } else {
+            classpath files(takdevPlugin)
+        }
+    }
+}
+
+allprojects {
+    repositories {
+        google()
+        mavenCentral()
+        mavenLocal()
+        maven {
+            url "https://jitpack.io"
+        }
+    }
+}
+
+apply plugin: 'com.android.application'
+apply plugin: 'com.guardsquare.proguard'
+apply plugin: 'com.google.protobuf'
+apply plugin: 'kotlin-android'
+apply plugin: 'kotlin-parcelize'
+apply plugin: 'kotlinx-serialization'
+apply plugin: 'atak-takdev-plugin'
+
+android {
+    compileSdkVersion 30
+    buildToolsVersion "30.0.3"
+
+    dexOptions {
+        jumboMode = true
+    }
+
+    defaultConfig {
+        minSdkVersion 21
+        ndk {
+            abiFilters "armeabi-v7a", "arm64-v8a", "x86"
+        }
+    }
+
+    flavorDimensions "application"
+    productFlavors {
+        civ {
+            dimension "application"
+            manifestPlaceholders = [atakApiVersion: "com.atakmap.app@" + ATAK_VERSION + ".CIV"]
+        }
+    }
+
+    sourceSets {
+        main {
+            setProperty("archivesBaseName", "ATAK-Plugin-" + rootProject.name + "-" + PLUGIN_VERSION + "-" + getVersionName() + "-" + ATAK_VERSION)
+            defaultConfig.versionCode = getVersionCode()
+            defaultConfig.versionName = PLUGIN_VERSION + " (" + getVersionName() + ") - [" + ATAK_VERSION + "]"
+
+            proto {
+                srcDir 'src/main/meshtastic-protobuf'
+            }
+        }
+        test {
+            proto {
+                srcDir 'src/main/meshtastic-protobuf'
+            }
+            java.srcDirs 'src/test/java'
+        }
+        // Move the tests to tests/java, tests/res, etc...
+        //instrumentTest.setRoot('tests')
+
+        // Move the build types to build-types/<type>
+        // For instance, build-types/debug/java, build-types/debug/AndroidManifest.xml, ...
+        // This moves them out of them default location under src/<type>/... which would
+        // conflict with src/ being used by the main source set.
+        // Adding new build types or product flavors should be accompanied
+        // by a similar customization.
+        debug.setRoot('build-types/debug')
+        release.setRoot('build-types/release')
+    }
+
+    packagingOptions {
+        exclude 'META-INF/INDEX.LIST'
+    }
+
+    lintOptions {
+        checkReleaseBuilds true
+        // Or, if you prefer, you can continue to check for errors in release builds,
+        // but continue the build even when errors are found:
+        abortOnError true
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_1_8
+        targetCompatibility JavaVersion.VERSION_1_8
+    }
+
+    kotlinOptions {
+        jvmTarget = "1.8"
+    }
+
+    signingConfigs {
+        debug {
+            def debugKeyFile = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takDebugKeyFile')
+            def debugKeyFilePassword = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takDebugKeyFilePassword')
+            def debugKeyAlias = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takDebugKeyAlias')
+            def debugKeyPassword = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takDebugKeyPassword')
+
+            if (debugKeyFile == null) {
+                debugKeyFile = "${rootDir}/pipeline-signing-key.keystore"
+                debugKeyFilePassword = 'keyfilepass'
+                debugKeyAlias = 'pipeline-signing-key'
+                debugKeyPassword = 'keypass'
+            }
+
+            storeFile file(debugKeyFile)
+            if (debugKeyFilePassword != null) storePassword debugKeyFilePassword
+            if (debugKeyAlias != null) keyAlias debugKeyAlias
+            if (debugKeyPassword != null) keyPassword debugKeyPassword
+        }
+        release {
+            def releaseKeyFile = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takReleaseKeyFile')
+            def releaseKeyFilePassword = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takReleaseKeyFilePassword')
+            def releaseKeyAlias = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takReleaseKeyAlias')
+            def releaseKeyPassword = getValueFromPropertiesFile(project.rootProject.file('local.properties'), 'takReleaseKeyPassword')
+
+            if (releaseKeyFile == null) {
+                releaseKeyFile = "${rootDir}/pipeline-signing-key.keystore"
+                releaseKeyFilePassword = 'keyfilepass'
+                releaseKeyAlias = 'pipeline-signing-key'
+                releaseKeyPassword = 'keypass'
+            }
+
+            storeFile file(releaseKeyFile)
+            if (releaseKeyFilePassword != null) storePassword releaseKeyFilePassword
+            if (releaseKeyAlias != null) keyAlias releaseKeyAlias
+            if (releaseKeyPassword != null) keyPassword releaseKeyPassword
+        }
+    }
+
+    buildTypes {
+        debug {
+            debuggable true
+            matchingFallbacks = ['sdk']
+        }
+
+        release {
+            minifyEnabled false
+            proguardFile 'proguard-gradle.txt'
+            signingConfig signingConfigs.release
+            matchingFallbacks = ['odk']
+        }
+    }
+}
+
+proguard {
+    configurations {
+        release {
+            defaultConfiguration 'proguard-android-optimize.txt'
+            configuration 'proguard-gradle.txt'
+        }
+    }
+}
+
+// Attempt to get a suitable version name for the plugin based on
+// either a git or svn repository
+def getVersionName() {
+    try {
+        def stdout = new ByteArrayOutputStream()
+        exec {
+            commandLine 'git', 'rev-parse', '--short=8', 'HEAD'
+            standardOutput = stdout
+        }
+        def describe = stdout.toString().trim()
+        println("versionName[git]: $describe")
+        return describe
+    } catch (Exception ignored) {
+        println("error occured, using revision of 1")
+        return 1
+    }
+}
+
+
+// Attempt to get a suitable version code for the plugin based on
+// either a git or svn repository
+def getVersionCode() {
+    try {
+        new ByteArrayOutputStream().withStream { os ->
+            exec {
+                executable = 'git'
+                args = ['show', '-s', '--format=%ct']
+                standardOutput = os
+                ignoreExitValue = true
+            }
+
+            def outputAsString = os.toString()
+            ext.revision = "$outputAsString".toInteger()
+
+            println("version[git]: $revision")
+        }
+    } catch (Exception ignored) {
+        println("error occured, using revision of 1")
+        ext.revision = 1
+    }
+
+    return revision
+}
+
+dependencies {
+    implementation "androidx.constraintlayout:constraintlayout:2.1.4"
+
+    implementation 'com.google.protobuf:protobuf-kotlin-lite:3.21.12'
+
+    implementation "org.jetbrains.kotlinx:kotlinx-serialization-runtime:1.0-M1-1.4.0-rc"
+
+    implementation 'com.google.code.gson:gson:2.10.1'
+    implementation 'me.dm7.barcodescanner:zxing:1.9.13'
+    implementation 'eo.view:batterymeter:2.0.0'
+
+    implementation 'com.paulmandal.atak:libcotshrink:1.0.3'
+
+    testImplementation 'junit:junit:4.13.2'
+}
+
+protobuf {
+    protoc {
+        artifact = 'com.google.protobuf:protoc:3.21.9'
+    }
+    generateProtoTasks {
+        all().each { task ->
+            task.builtins {
+                java {
+                    option 'lite'
+                }
+                kotlin {
+                    option 'lite'
+                }
+            }
+        }
+    }
+}

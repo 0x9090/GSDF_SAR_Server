@@ -1,0 +1,142 @@
+-dontskipnonpubliclibraryclasses
+-dontshrink
+-dontoptimize
+
+############### ACRA specifics
+# we need line numbers in our stack traces otherwise they are pretty useless
+-renamesourcefileattribute SourceFile
+-keepattributes SourceFile,LineNumberTable
+
+-applymapping <atak.proguard.mapping>
+-repackageclasses atakplugin.AtakForwarder
+
+-keepattributes *Annotation*
+-keepattributes Signature, InnerClasses
+
+-keep class * implements android.os.Parcelable {
+  public static final android.os.Parcelable$Creator *;
+}
+
+-keepclassmembers class **.R$* {
+    public static <fields>;
+}
+
+# For enumeration classes, see http://proguard.sourceforge.net/manual/examples.html#enumerations
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+
+
+# Preserve all native method names and the names of their classes.
+-keepclasseswithmembernames class * {
+    native <methods>;
+}
+
+-keepclassmembers class * {
+    @org.simpleframework.xml.* *;
+}
+
+
+# For enumeration classes, see http://proguard.sourceforge.net/manual/examples.html#enumerations
+-keepclassmembers enum * {
+    public static **[] values();
+    public static ** valueOf(java.lang.String);
+}
+
+-keep class * extends transapps.maps.plugin.tool.Tool {
+}
+-keep class * implements transapps.maps.plugin.lifecycle.Lifecycle {
+}
+
+# overcome an existing bug in the gradle subsystem (3.5.x)
+-keep class module-info
+
+# These classes use Parcelable
+-keep class com.geeksville.mesh.** { *; }
+
+# ATAK Forwarder Libraries
+-keep class com.google.** {*;}
+-keep class com.siemens.** {*;}
+-keep class com.sun.** {*;}
+-keep class eo.view.** {*;}
+-keep class javax.** {*;}
+-keep class me.dm7.** {*;}
+-keep class org.apache.** {*;}
+-keep class org.w3c.** {*;}
+-keep class org.xml.** {*;}
+-keep class org.xmlpull.** {*;}
+
+# Protobufs
+-keep public class * extends com.google.protobuf.GeneratedMessage {*;}
+-keep public class * extends com.google.protobuf.GeneratedMessageLite {*;}
+
+# TODO: review all of these and remove unnecessary ones, this is from trying to sign for 4.8 / switching to ProGuard from R8
+-keep class org.jvnet..** {*;}
+-keep class kotlin.jvm.internal.** {*;}
+-keep class kotlin.coroutines.jvm.internal.** {*;}
+-keep class kotlin.jvm.functions.** {*;}
+-keep class kotlin.coroutines.** {*;}
+-keep class kotlin.collections.** {*;}
+
+-dontwarn module-info
+-dontwarn java.awt.**
+-dontwarn org.xmlpull.**
+-dontwarn org.xml.sax.ContentHandler
+-dontwarn org.xml.sax.XMLReader
+-dontwarn com.sun.activation.viewers.ImageViewer
+-dontwarn com.sun.xml.fastinfoset.stax.StAXDocumentSerializer
+-dontwarn org.jvnet.staxex.XMLStreamWriterEx
+-dontwarn org.jvnet.staxex.XMLStreamReaderEx
+-dontwarn com.sun.xml.fastinfoset.stax.StAXDocumentParser
+-dontwarn java.beans.Introspector
+-dontwarn org.jvnet.fastinfoset.VocabularyApplicationData
+-dontwarn org.jvnet.staxex.Base64Data
+-dontwarn com.sun.activation.viewers.ImageViewerCanvas
+-dontwarn com.sun.activation.viewers.TextEditor
+-dontwarn com.sun.activation.viewers.TextViewer
+-dontwarn java.nio.ByteBuffer
+-dontwarn kotlin.jvm.internal.**
+-dontwarn kotlin.coroutines.jvm.internal.**
+-dontwarn kotlin.jvm.functions.**
+-dontwarn kotlin.coroutines.**
+-dontwarn kotlin.collections.**
+
+-dontwarn java.lang.instrument.ClassFileTransformer
+-dontwarn java.lang.ClassValue
+-dontwarn android.content.res.XmlResourceParser
+
+
+##---------------Begin: proguard configuration for Gson  ----------
+# Gson uses generic type information stored in a class file when working with fields. Proguard
+# removes such information by default, so configure it to keep all of it.
+-keepattributes Signature
+
+# For using GSON @Expose annotation
+-keepattributes *Annotation*
+
+# Gson specific classes
+-dontwarn sun.misc.**
+#-keep class com.google.gson.stream.** { *; }
+
+# Application classes that will be serialized/deserialized over Gson
+-keep class com.paulmandal.atak.forwarder.comm.meshtastic.MeshtasticDevice { <fields>; }
+
+# Prevent proguard from stripping interface information from TypeAdapter, TypeAdapterFactory,
+# JsonSerializer, JsonDeserializer instances (so they can be used in @JsonAdapter)
+-keep class * extends com.google.gson.TypeAdapter
+-keep class * implements com.google.gson.TypeAdapterFactory
+-keep class * implements com.google.gson.JsonSerializer
+-keep class * implements com.google.gson.JsonDeserializer
+
+# Prevent R8 from leaving Data object members always null
+-keepclassmembers,allowobfuscation class * {
+  @com.google.gson.annotations.SerializedName <fields>;
+}
+
+# Retain generic signatures of TypeToken and its subclasses with R8 version 3.0 and higher.
+-keep,allowobfuscation,allowshrinking class com.google.gson.reflect.TypeToken
+-keep,allowobfuscation,allowshrinking class * extends com.google.gson.reflect.TypeToken
+
+##---------------End: proguard configuration for Gson  ----------

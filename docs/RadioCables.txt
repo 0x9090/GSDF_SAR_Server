@@ -1,0 +1,2 @@
+BTECH ARPS-K1 for BaoFeng = single-duplex transmission OR reception
+
